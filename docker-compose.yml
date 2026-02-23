@@ -1,0 +1,26 @@
+﻿services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+
+  model:
+    build: ./model_service
+    ports:
+      - "8001:8001"
+
+  api:
+    build: ./api
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/appdb
+      MODEL_URL: http://model:8001
+      CORS_ALLOW_ORIGINS: "*"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - model
