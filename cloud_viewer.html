@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Voice MVP Graph Viewer</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 20px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    input { padding:10px; min-width: 320px; }
+    button { padding:10px 14px; cursor:pointer; }
+    .small { color:#666; font-size: 12px; }
+    #status { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>Voice MVP Graph Viewer</h2>
+
+  <div class="row">
+    <label>API Base URL</label>
+    <input id="base" value="https://voice-mvp-api.onrender.com" />
+  </div>
+
+  <div class="row" style="margin-top:10px;">
+    <label>Job ID</label>
+    <input id="job" placeholder="job_id 붙여넣기" />
+    <button id="btnFetch">가져오기</button>
+    <button id="btnPoll">폴링 시작</button>
+    <button id="btnStop">중지</button>
+  </div>
+
+  <div id="status" class="small"></div>
+  <div id="plot" style="width:100%;height:70vh;margin-top:10px;"></div>
+
+  <script>
+    let polling = false;
+    let timer = null;
+
+    function setStatus(msg) {
+      document.getElementById("status").textContent = msg;
+    }
+
+    function plotGraph(g) {
+      const traces = [
+        { x: g.x, y: g.y,  name: "y",  mode: "lines" },
+        { x: g.x, y: g.dy, name: "dy", mode: "lines" },
+        { x: g.x, y: g.d2y,name: "d2y",mode: "lines" },
+      ];
+      Plotly.newPlot("plot", traces, {
+        margin: { t: 30, r: 20, b: 40, l: 50 },
+        legend: { orientation: "h" },
+        xaxis: { title: "x" },
+        yaxis: { title: "value" },
+      }, { responsive: true });
+    }
+
+    async function fetchOnce() {
+      const base = document.getElementById("base").value.replace(/\/+$/, "");
+      const job  = document.getElementById("job").value.trim();
+      if (!job) { alert("job_id를 입력해줘"); return null; }
+
+      setStatus("요청 중...");
+      const res = await fetch(`${base}/jobs/${job}/result`);
+      const data = await res.json();
+
+      setStatus(`status=${data.status} progress=${data.progress ?? "?"} ${data.error ? " / error=" + data.error : ""}`);
+
+      if (data.status === "done" && data.graph) plotGraph(data.graph);
+      return data;
+    }
+
+    async function pollLoop() {
+      polling = true;
+      setStatus("폴링 시작...");
+      while (polling) {
+        const data = await fetchOnce();
+        if (data && (data.status === "done" || data.status === "failed")) {
+          polling = false;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      setStatus(polling ? "폴링 중..." : "폴링 종료");
+    }
+
+    document.getElementById("btnFetch").onclick = () => fetchOnce();
+    document.getElementById("btnPoll").onclick = () => { if (!polling) pollLoop(); };
+    document.getElementById("btnStop").onclick = () => { polling = false; };
+  </script>
+</body>
+</html>
